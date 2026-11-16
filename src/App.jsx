@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   Bell,
@@ -52,6 +52,15 @@ const stageGroups = ['설계', '발주 · 입고', '조립 · 시운전'];
 const tabs = ['업무', '간트차트', '발주 · 입고', '자료', '활동'];
 const fmtShort = (date) => date ? `${Number(date.slice(5, 7))}.${Number(date.slice(8, 10))}` : '미정';
 
+function savedValue(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function Status({ children }) {
   const type = children === '완료' || children === '입고 완료' ? 'done'
     : children === '지연' ? 'late'
@@ -61,9 +70,9 @@ function Status({ children }) {
 }
 
 function App() {
-  const [projects, setProjects] = useState(initialProjects);
-  const [tasksByProject, setTasksByProject] = useState({ luna: makeTasks() });
-  const [ordersByProject, setOrdersByProject] = useState({ luna: initialOrders });
+  const [projects, setProjects] = useState(() => savedValue('equipment-projects', initialProjects));
+  const [tasksByProject, setTasksByProject] = useState(() => savedValue('equipment-tasks', { luna: makeTasks() }));
+  const [ordersByProject, setOrdersByProject] = useState(() => savedValue('equipment-orders', { luna: initialOrders }));
   const [projectId, setProjectId] = useState('luna');
   const [tab, setTab] = useState('업무');
   const [filter, setFilter] = useState('전체 업무');
@@ -73,6 +82,7 @@ function App() {
   const [modal, setModal] = useState('');
   const [toast, setToast] = useState('');
   const [draftFile, setDraftFile] = useState(null);
+  const [receiveTarget, setReceiveTarget] = useState(null);
   const project = projects.find((item) => item.id === projectId) ?? projects[0];
   const tasks = tasksByProject[projectId] ?? [];
   const orders = ordersByProject[projectId] ?? [];
@@ -84,6 +94,10 @@ function App() {
     const matchesStatus = filter === '전체 업무' || (filter === '미완료' && task.status !== '완료') || task.owner === filter;
     return matchesText && matchesStatus;
   }), [tasks, query, filter]);
+
+  useEffect(() => { localStorage.setItem('equipment-projects', JSON.stringify(projects)); }, [projects]);
+  useEffect(() => { localStorage.setItem('equipment-tasks', JSON.stringify(tasksByProject)); }, [tasksByProject]);
+  useEffect(() => { localStorage.setItem('equipment-orders', JSON.stringify(ordersByProject)); }, [ordersByProject]);
 
   const updateProjectTasks = (nextTasks) => setTasksByProject((current) => ({ ...current, [projectId]: nextTasks }));
   const updateOrders = (nextOrders) => setOrdersByProject((current) => ({ ...current, [projectId]: nextOrders }));
@@ -112,6 +126,27 @@ function App() {
     }]);
     setModal('');
     flash('업무를 추가했습니다.');
+  };
+
+  const addProject = (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const id = `project-${Date.now()}`;
+    const newProject = {
+      id,
+      name: form.get('name'),
+      customer: form.get('customer') || '미정',
+      owner: form.get('owner') || '미정',
+      due: form.get('due') || '',
+      color: 'violet',
+    };
+    setProjects([...projects, newProject]);
+    setTasksByProject({ ...tasksByProject, [id]: [] });
+    setOrdersByProject({ ...ordersByProject, [id]: [] });
+    setProjectId(id);
+    setTab('업무');
+    setModal('');
+    flash('프로젝트를 추가했습니다.');
   };
 
   const addOrder = (event) => {
@@ -145,8 +180,26 @@ function App() {
       received,
       status: received === order.qty ? '입고 완료' : '부분 입고',
     } : order));
+    setTasksByProject((current) => ({
+      ...current,
+      [projectId]: (current[projectId] ?? []).map((task) => task.order === id
+        ? { ...task, status: received === order.qty ? '완료' : '부분 입고' }
+        : task),
+    }));
     setSelectedOrder(id);
     flash(`입고를 기록했습니다. 잔량 ${target.qty - received}개`);
+  };
+
+  const requestReceipt = (id) => {
+    const order = orders.find((item) => item.id === id);
+    if (order && order.qty > order.received) setReceiveTarget(order);
+  };
+
+  const submitReceipt = (event) => {
+    event.preventDefault();
+    const amount = Number(new FormData(event.currentTarget).get('amount'));
+    receiveOrder(receiveTarget.id, amount);
+    setReceiveTarget(null);
   };
 
   return (
@@ -174,17 +227,18 @@ function App() {
           {tab === '업무' && <>
             <div className="toolbar"><div className="toolbar-left"><div className="view-select"><ListFilter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="업무 필터"><option>전체 업무</option><option>미완료</option><option>추원훈</option><option>설계팀</option><option>조립팀</option></select><ChevronDown size={13} /></div><button className="toolbar-button" onClick={() => setFilter('미완료')}>필터</button><button className="toolbar-button" onClick={() => flash('업무는 제작 단계별로 묶여 있습니다.')}>그룹화 <ChevronDown size={13} /></button></div><div className="toolbar-right"><div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="업무 검색" aria-label="업무 검색" /></div><button className="toolbar-button" onClick={() => setModal('task')}><Plus size={15} />업무 추가</button><button className="icon-button bordered" aria-label="더 보기"><MoreHorizontal size={17} /></button></div></div>
             <TaskGroups tasks={filteredTasks} selectedTask={selectedTask} onSelect={setSelectedTask} />
-            {selectedTask && openTask && <TaskDrawer task={openTask} orders={orders} onClose={() => setSelectedTask(null)} onOpenOrder={(id) => { setSelectedOrder(id); setTab('발주 · 입고'); }} onReceive={receiveOrder} onOrder={() => { setDraftFile(null); setModal('order'); }} />}
+            {selectedTask && openTask && <TaskDrawer task={openTask} orders={orders} onClose={() => setSelectedTask(null)} onOpenOrder={(id) => { setSelectedOrder(id); setTab('발주 · 입고'); }} onReceive={requestReceipt} onOrder={() => { setDraftFile(null); setModal('order'); }} />}
           </>}
           {tab === '간트차트' && <GanttView tasks={filteredTasks} query={query} setQuery={setQuery} onTaskClick={setSelectedTask} />}
-          {tab === '발주 · 입고' && <OrdersView orders={orders} selectedOrder={selectedOrder} onSelect={setSelectedOrder} onAdd={() => { setDraftFile(null); setModal('order'); }} onReceive={receiveOrder} />}
+          {tab === '발주 · 입고' && <OrdersView orders={orders} selectedOrder={selectedOrder} onSelect={setSelectedOrder} onAdd={() => { setDraftFile(null); setModal('order'); }} onReceive={requestReceipt} />}
           {tab === '자료' && <FilesView orders={orders} />}
           {tab === '활동' && <ActivityView orders={orders} tasks={tasks} />}
         </section>
       </main>
       {modal && <Modal title={modal === 'task' ? '새 업무' : modal === 'order' ? '발주 등록' : modal === 'project' ? '프로젝트 추가' : '요청 업무 등록'} onClose={() => setModal('')}>
-        {modal === 'task' ? <TaskForm onSubmit={addTask} onCancel={() => setModal('')} /> : modal === 'order' ? <OrderForm file={draftFile} setFile={setDraftFile} project={project} onSubmit={addOrder} onCancel={() => setModal('')} /> : <BasicForm type={modal} onCancel={() => setModal('')} onSubmit={(event) => { event.preventDefault(); setModal(''); flash('등록 화면 예시입니다.'); }} />}
+        {modal === 'task' ? <TaskForm onSubmit={addTask} onCancel={() => setModal('')} /> : modal === 'order' ? <OrderForm file={draftFile} setFile={setDraftFile} project={project} onSubmit={addOrder} onCancel={() => setModal('')} /> : <BasicForm type={modal} onCancel={() => setModal('')} onSubmit={modal === 'project' ? addProject : (event) => { event.preventDefault(); setModal(''); flash('요청을 등록했습니다.'); }} />}
       </Modal>}
+      {receiveTarget && <Modal title="입고 수량 기록" onClose={() => setReceiveTarget(null)}><ReceiptForm order={receiveTarget} onSubmit={submitReceipt} onCancel={() => setReceiveTarget(null)} /></Modal>}
       {toast && <div className="toast" role="status"><Check size={16} />{toast}</div>}
     </div>
   );
@@ -201,7 +255,7 @@ function TaskGroups({ tasks, selectedTask, onSelect }) {
 function TaskDrawer({ task, orders, onClose, onOpenOrder, onReceive, onOrder }) {
   const [comment, setComment] = useState('');
   const order = orders.find((item) => item.id === task.order);
-  return <aside className="task-drawer"><div className="drawer-top"><span>업무 상세</span><button className="icon-button small" onClick={onClose} aria-label="상세 닫기"><X size={17} /></button></div><div className="drawer-body"><Status>{task.status}</Status><h2>{task.title}</h2><div className="drawer-field"><span>담당자</span><div><span className="assignee-avatar">{task.owner[0]}</span>{task.owner}</div></div><div className="drawer-field"><span>시작일</span><div><CalendarDays size={14} />{task.start || '미정'}</div></div><div className="drawer-field"><span>마감일</span><div><CalendarDays size={14} />{task.due || '미정'}</div></div><div className="drawer-field"><span>단계</span><div>{task.group}</div></div><div className="drawer-description"><span>진행 메모</span><p>{task.note || '등록된 메모가 없습니다.'}</p></div>{order && <div className="drawer-order"><div className="drawer-order-heading"><span>연결 발주</span><button className="text-link" onClick={() => onOpenOrder(order.id)}>{order.id}<ChevronRight size={13} /></button></div><div className="order-preview"><FileSpreadsheet size={17} /><div><strong>{order.file || order.item}</strong><small>{order.vendor} · {order.received}/{order.qty}개 입고</small></div><Status>{order.status}</Status></div>{order.received < order.qty && <button className="button secondary full-width" onClick={() => onReceive(order.id, order.qty - order.received)}>입고 처리</button>}</div>}<button className="button secondary full-width" onClick={onOrder}><Plus size={14} />추가 발주</button><div className="drawer-comments"><h3><MessageSquare size={15} />댓글</h3><div className="comment"><span className="assignee-avatar">추</span><div><strong>추원훈 <small>오늘 09:30</small></strong><p>입고된 부품부터 조립 진행하겠습니다.</p></div></div></div></div><form className="comment-compose" onSubmit={(event) => { event.preventDefault(); if (comment.trim()) setComment(''); }}><textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="댓글 남기기" rows="2" /><div><button type="button" className="icon-button small"><Paperclip size={15} /></button><button type="submit" className="button primary small-button" disabled={!comment.trim()}>보내기</button></div></form></aside>;
+  return <aside className="task-drawer"><div className="drawer-top"><span>업무 상세</span><button className="icon-button small" onClick={onClose} aria-label="상세 닫기"><X size={17} /></button></div><div className="drawer-body"><Status>{task.status}</Status><h2>{task.title}</h2><div className="drawer-field"><span>담당자</span><div><span className="assignee-avatar">{task.owner[0]}</span>{task.owner}</div></div><div className="drawer-field"><span>시작일</span><div><CalendarDays size={14} />{task.start || '미정'}</div></div><div className="drawer-field"><span>마감일</span><div><CalendarDays size={14} />{task.due || '미정'}</div></div><div className="drawer-field"><span>단계</span><div>{task.group}</div></div><div className="drawer-description"><span>진행 메모</span><p>{task.note || '등록된 메모가 없습니다.'}</p></div>{order && <div className="drawer-order"><div className="drawer-order-heading"><span>연결 발주</span><button className="text-link" onClick={() => onOpenOrder(order.id)}>{order.id}<ChevronRight size={13} /></button></div><div className="order-preview"><FileSpreadsheet size={17} /><div><strong>{order.file || order.item}</strong><small>{order.vendor} · {order.received}/{order.qty}개 입고</small></div><Status>{order.status}</Status></div>{order.received < order.qty && <button className="button secondary full-width" onClick={() => onReceive(order.id)}>입고 처리</button>}</div>}<button className="button secondary full-width" onClick={onOrder}><Plus size={14} />추가 발주</button><div className="drawer-comments"><h3><MessageSquare size={15} />댓글</h3><div className="comment"><span className="assignee-avatar">추</span><div><strong>추원훈 <small>오늘 09:30</small></strong><p>입고된 부품부터 조립 진행하겠습니다.</p></div></div></div></div><form className="comment-compose" onSubmit={(event) => { event.preventDefault(); if (comment.trim()) setComment(''); }}><textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="댓글 남기기" rows="2" /><div><button type="button" className="icon-button small"><Paperclip size={15} /></button><button type="submit" className="button primary small-button" disabled={!comment.trim()}>보내기</button></div></form></aside>;
 }
 
 function GanttView({ tasks, query, setQuery, onTaskClick }) {
@@ -225,7 +279,7 @@ function OrdersView({ orders, selectedOrder, onSelect, onAdd, onReceive }) {
 }
 
 function OrderDetail({ order, onClose, onReceive }) {
-  return <aside className="order-detail"><div className="drawer-top"><strong>{order.id} · {order.type}</strong><button className="icon-button small" onClick={onClose} aria-label="상세 닫기"><X size={17} /></button></div><div className="drawer-body"><Status>{order.status}</Status><h2>{order.item}</h2><div className="drawer-field"><span>공급 거래처</span><div>{order.vendor}</div></div><div className="drawer-field"><span>수량</span><div>{order.received} / {order.qty}개 입고</div></div><div className="drawer-field"><span>납기일</span><div>2026.{order.due}</div></div><div className="drawer-field"><span>메일 발송</span><div>{order.status === '발송 대기' ? '서버 연동 대기' : '발송 완료 · 11.14 14:20'}</div></div><div className="order-preview"><FileSpreadsheet size={17} /><div><strong>{order.file || '첨부 파일 없음'}</strong><small>발주 원본 엑셀</small></div></div>{order.received < order.qty && <button className="button primary full-width" onClick={() => onReceive(order.id, order.qty - order.received)}>잔량 {order.qty - order.received}개 입고 처리</button>}</div></aside>;
+  return <aside className="order-detail"><div className="drawer-top"><strong>{order.id} · {order.type}</strong><button className="icon-button small" onClick={onClose} aria-label="상세 닫기"><X size={17} /></button></div><div className="drawer-body"><Status>{order.status}</Status><h2>{order.item}</h2><div className="drawer-field"><span>공급 거래처</span><div>{order.vendor}</div></div><div className="drawer-field"><span>수량</span><div>{order.received} / {order.qty}개 입고</div></div><div className="drawer-field"><span>납기일</span><div>2026.{order.due}</div></div><div className="drawer-field"><span>메일 발송</span><div>{order.status === '발송 대기' ? '서버 연동 대기' : '발송 완료 · 11.14 14:20'}</div></div><div className="order-preview"><FileSpreadsheet size={17} /><div><strong>{order.file || '첨부 파일 없음'}</strong><small>발주 원본 엑셀</small></div></div>{order.received < order.qty && <button className="button primary full-width" onClick={() => onReceive(order.id)}>입고 수량 기록</button>}</div></aside>;
 }
 
 function FilesView({ orders }) {
@@ -253,7 +307,13 @@ function OrderForm({ file, setFile, project, onSubmit, onCancel }) {
 }
 
 function BasicForm({ type, onCancel, onSubmit }) {
-  return <form className="form-body" onSubmit={onSubmit}><label><span>{type === 'project' ? '프로젝트명' : '요청 업무'}</span><input required placeholder="이름을 입력하세요" /></label><div className="form-pair"><label><span>고객사</span><input placeholder="고객사" /></label><label><span>담당자</span><input placeholder="담당자" /></label></div><div className="modal-actions"><button type="button" className="button secondary" onClick={onCancel}>취소</button><button className="button primary">등록</button></div></form>;
+  const isProject = type === 'project';
+  return <form className="form-body" onSubmit={onSubmit}><label><span>{isProject ? '프로젝트명' : '요청 업무'}</span><input name="name" required placeholder="이름을 입력하세요" /></label><div className="form-pair"><label><span>고객사</span><input name="customer" placeholder="고객사" /></label><label><span>담당자</span><input name="owner" placeholder="담당자" /></label></div>{isProject && <label><span>납기일</span><input name="due" type="date" /></label>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onCancel}>취소</button><button className="button primary">등록</button></div></form>;
+}
+
+function ReceiptForm({ order, onSubmit, onCancel }) {
+  const remaining = order.qty - order.received;
+  return <form className="form-body" onSubmit={onSubmit}><div className="form-hint"><Inbox size={15} />{order.id} · {order.item} · 현재 {order.received}/{order.qty}개 입고</div><label><span>이번 입고 수량</span><input name="amount" type="number" min="1" max={remaining} defaultValue={remaining} required /></label><small className="form-note">남은 수량은 {remaining}개입니다. 나누어 입고 처리할 수 있습니다.</small><div className="modal-actions"><button type="button" className="button secondary" onClick={onCancel}>취소</button><button className="button primary" type="submit">입고 기록</button></div></form>;
 }
 
 export default App;
