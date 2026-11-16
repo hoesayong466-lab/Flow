@@ -74,8 +74,8 @@ function App() {
   const [tasksByProject, setTasksByProject] = useState(() => savedValue('equipment-tasks', { luna: makeTasks() }));
   const [ordersByProject, setOrdersByProject] = useState(() => savedValue('equipment-orders', { luna: initialOrders }));
   const [projectId, setProjectId] = useState('luna');
-  const [tab, setTab] = useState('업무');
-  const [taskView, setTaskView] = useState('목록');
+  const [tab, setTab] = useState('전체 현황');
+  const [taskView, setTaskView] = useState('보드');
   const [filter, setFilter] = useState('전체 업무');
   const [query, setQuery] = useState('');
   const [selectedTask, setSelectedTask] = useState(null);
@@ -225,7 +225,7 @@ function App() {
         <section className={`project-header ${tab === '전체 현황' ? 'overview-hidden' : ''}`}><div className="project-heading-main"><div className={`large-project-marker ${project.color}`}><FolderKanban size={20} /></div><div><div className="title-row"><h1>{project.name}</h1><button className="icon-button small" aria-label="프로젝트 메뉴"><MoreHorizontal size={17} /></button></div><div className="project-subtitle"><span>{project.customer}</span><span className="separator">·</span><span>담당 {project.owner}</span><span className="separator">·</span><span><CalendarDays size={13} /> 납기 {project.due}</span></div></div></div><div className="header-actions"><button className="button secondary" onClick={() => flash('프로젝트 링크를 복사했습니다.')}><Paperclip size={15} />공유</button><button className="button primary" onClick={() => { setDraftFile(null); setModal('order'); }}><Plus size={15} />발주 등록</button></div></section>
         <nav className={`project-tabs ${tab === '전체 현황' ? 'overview-hidden' : ''}`}>{tabs.map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => { setTab(item); setSelectedTask(null); setSelectedOrder(null); }}>{item}{item === '발주 · 입고' && <span className="tab-count">{orders.length}</span>}</button>)}</nav>
         <section className="page-content">
-          {tab === '전체 현황' && <OverviewView projects={projects} tasksByProject={tasksByProject} onOpenProject={selectProject} onAddProject={() => setModal('project')} />}
+          {tab === '전체 현황' && <OverviewView projects={projects} tasksByProject={tasksByProject} ordersByProject={ordersByProject} onOpenProject={selectProject} onAddProject={() => setModal('project')} />}
           {tab === '업무' && <>
             <div className="task-view-switch"><div className="segmented-control"><button className={taskView === '목록' ? 'selected' : ''} onClick={() => setTaskView('목록')}>목록</button><button className={taskView === '보드' ? 'selected' : ''} onClick={() => setTaskView('보드')}>보드</button></div><span>업무를 캘린더와 상태별 카드로 확인합니다.</span></div>
             <div className="toolbar"><div className="toolbar-left"><div className="view-select"><ListFilter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="업무 필터"><option>전체 업무</option><option>미완료</option><option>추원훈</option><option>설계팀</option><option>조립팀</option></select><ChevronDown size={13} /></div><button className="toolbar-button" onClick={() => setFilter('미완료')}>필터</button><button className="toolbar-button" onClick={() => flash('업무는 제작 단계별로 묶여 있습니다.')}>그룹화 <ChevronDown size={13} /></button></div><div className="toolbar-right"><div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="업무 검색" aria-label="업무 검색" /></div><button className="toolbar-button" onClick={() => setModal('task')}><Plus size={15} />업무 추가</button><button className="icon-button bordered" aria-label="더 보기"><MoreHorizontal size={17} /></button></div></div>
@@ -282,7 +282,7 @@ function getProjectOverview(project, tasks) {
   return { ...project, tasks, progress, status, start: allDates[0] ?? '', stages };
 }
 
-function OverviewView({ projects, tasksByProject, onOpenProject, onAddProject }) {
+function OverviewView({ projects, tasksByProject, ordersByProject, onOpenProject, onAddProject }) {
   const [statusFilter, setStatusFilter] = useState('전체');
   const [query, setQuery] = useState('');
   const rows = projects.map((project) => getProjectOverview(project, tasksByProject[project.id] ?? []));
@@ -294,8 +294,11 @@ function OverviewView({ projects, tasksByProject, onOpenProject, onAddProject })
     지연: rows.filter((row) => row.status === '지연').length,
     완료: rows.filter((row) => row.status === '완료').length,
   };
+  const outstandingOrders = Object.values(ordersByProject).flat().filter((order) => order.received < order.qty).length;
+  const finishedStages = rows.reduce((sum, row) => sum + row.stages.filter((stage) => stage.status === '완료').length, 0);
   return <div className="overview-page">
-    <div className="overview-heading"><div><span className="eyebrow">WORKSPACE / PROJECTS</span><h1>전체 현황</h1><p>여러 설비 프로젝트의 일정과 진행 단계를 한 화면에서 확인합니다.</p></div><button className="button primary" onClick={onAddProject}><Plus size={15} />프로젝트 추가</button></div>
+    <div className="overview-heading"><div><span className="eyebrow">설비팀 워크스페이스</span><h1>프로젝트 현황</h1><p>진행 단계와 납기, 미입고 발주를 한눈에 확인하세요.</p></div><button className="button primary" onClick={onAddProject}><Plus size={15} />프로젝트 추가</button></div>
+    <div className="overview-metrics"><article><span>전체 프로젝트</span><strong>{rows.length}<small>건</small></strong><div><FolderKanban size={15} />워크스페이스에 등록된 설비</div></article><article><span>진행 중</span><strong>{counts.진행}<small>건</small></strong><div><Activity size={15} />현재 작업이 진행 중인 프로젝트</div></article><article><span>지연</span><strong>{counts.지연}<small>건</small></strong><div><Clock3 size={15} />예정일 확인이 필요한 프로젝트</div></article><article><span>미입고 발주</span><strong>{outstandingOrders}<small>건</small></strong><div><Inbox size={15} />총 {finishedStages}개 진행 단계를 완료</div></article></div>
     <div className="overview-toolbar"><div className="overview-filters">{[['전체', counts.전체], ['진행 중', counts.진행], ['지연', counts.지연], ['완료', counts.완료]].map(([label, count]) => <button key={label} className={statusFilter === label ? 'active' : ''} onClick={() => setStatusFilter(label)}>{label}<span>{count}</span></button>)}</div><div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="프로젝트 검색" aria-label="프로젝트 검색" /></div></div>
     <div className="overview-list">{visible.map((row) => <article className="overview-row" key={row.id}>
       <div className="overview-project-meta"><div className="overview-project-title"><span className={`large-project-marker ${row.color}`}><FolderKanban size={18} /></span><div><button onClick={() => onOpenProject(row.id)}>{row.name}</button><small>{row.customer}</small></div></div><Status>{row.status}</Status><div className="overview-project-facts"><div><span>담당</span><strong>{row.owner || '미정'}</strong></div><div><span>일정</span><strong>{row.start ? fmtShort(row.start) : '시작 미정'} <i>→</i> {row.due ? fmtShort(row.due) : '종료 미정'}</strong></div></div><div className="overview-progress-label"><span>전체 진행</span><strong>{row.progress}%</strong></div><div className="overview-progress"><i style={{ width: `${row.progress}%` }} /></div><button className="overview-open-link" onClick={() => onOpenProject(row.id)}>프로젝트 열기 <ChevronRight size={14} /></button></div>
