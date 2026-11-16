@@ -25,9 +25,11 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import CadLibrary from './CadLibrary.jsx';
 
 const initialProjects = [
   { id: 'luna', name: '루나 행거 압입기 및 지그', customer: '이코리아', owner: '추원훈', due: '2026-11-27', color: 'violet' },
+  { id: 'luna-vision', name: 'Luna Lever 치수 Vision 검사 설비', customer: '미정', owner: '미정', due: '미정', color: 'blue' },
   { id: 'tank', name: '루나 워터탱크 공압기', customer: '이코리아', owner: '김진한', due: '2026-11-20', color: 'blue' },
   { id: 'xg', name: 'XG 스팀모듈 안착 지그', customer: '이코리아', owner: '김진한', due: '2026-11-30', color: 'orange' },
   { id: 'rubber', name: '고무 열융착기', customer: '가람산업', owner: '김철원', due: '2026-12-04', color: 'green' },
@@ -61,6 +63,13 @@ function savedValue(key, fallback) {
   }
 }
 
+function savedProjects() {
+  const saved = savedValue('equipment-projects', initialProjects);
+  if (!Array.isArray(saved)) return initialProjects;
+  const cadProject = initialProjects.find((project) => project.id === 'luna-vision');
+  return saved.some((project) => project.id === cadProject.id) ? saved : [...saved, cadProject];
+}
+
 function Status({ children }) {
   const type = children === '완료' || children === '입고 완료' ? 'done'
     : children === '지연' ? 'late'
@@ -70,7 +79,7 @@ function Status({ children }) {
 }
 
 function App() {
-  const [projects, setProjects] = useState(() => savedValue('equipment-projects', initialProjects));
+  const [projects, setProjects] = useState(savedProjects);
   const [tasksByProject, setTasksByProject] = useState(() => savedValue('equipment-tasks', { luna: makeTasks() }));
   const [ordersByProject, setOrdersByProject] = useState(() => savedValue('equipment-orders', { luna: initialOrders }));
   const [projectId, setProjectId] = useState('luna');
@@ -106,7 +115,7 @@ function App() {
 
   const selectProject = (id) => {
     setProjectId(id);
-    setTab('업무');
+    setTab(id === 'luna-vision' ? '자료' : '업무');
     setSelectedTask(null);
     setSelectedOrder(null);
     setQuery('');
@@ -370,7 +379,7 @@ function OrderDetail({ order, onClose, onReceive }) {
 }
 
 function FilesView({ orders }) {
-  return <><div className="toolbar"><div><h2 className="section-title">프로젝트 자료</h2><p className="section-description">도면과 발주 파일을 프로젝트 단위로 모아봅니다.</p></div><button className="button secondary"><Upload size={15} />자료 추가</button></div><div className="file-list">{[{ name: '루나_조립도_Rev2.pdf', group: '설계', date: '11.10' }, ...orders.map((order) => ({ name: order.file || `${order.id}_${order.item}.xlsx`, group: order.id, date: order.due }))].map((file) => <div className="file-row" key={file.name}><span className="file-icon"><FileText size={17} /></span><strong>{file.name}</strong><span>{file.group}</span><span>{file.date}</span><button className="icon-button small" aria-label="파일 메뉴"><MoreHorizontal size={16} /></button></div>)}</div></>;
+  return <CadLibrary orders={orders} />;
 }
 
 function ActivityView({ orders, tasks }) {
