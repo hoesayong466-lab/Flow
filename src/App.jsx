@@ -75,6 +75,7 @@ function App() {
   const [ordersByProject, setOrdersByProject] = useState(() => savedValue('equipment-orders', { luna: initialOrders }));
   const [projectId, setProjectId] = useState('luna');
   const [tab, setTab] = useState('업무');
+  const [taskView, setTaskView] = useState('목록');
   const [filter, setFilter] = useState('전체 업무');
   const [query, setQuery] = useState('');
   const [selectedTask, setSelectedTask] = useState(null);
@@ -208,7 +209,7 @@ function App() {
         <div className="workspace"><div className="workspace-icon"><FolderKanban size={18} /></div><div><strong>설비 진행 관리</strong><small>프로젝트 워크스페이스</small></div><ChevronDown size={15} className="workspace-chevron" /></div>
         <div className="side-scroll">
           <div className="side-section"><div className="side-heading">워크스페이스</div>
-            <button className="nav-item" onClick={() => setTab('업무')}><LayoutGrid size={16} />전체 프로젝트</button>
+            <button className={`nav-item ${tab === '전체 현황' ? 'nav-selected' : ''}`} onClick={() => setTab('전체 현황')}><LayoutGrid size={16} />전체 현황</button>
             <button className="nav-item" onClick={() => { setTab('발주 · 입고'); setSelectedOrder(null); }}><Inbox size={16} />발주 · 입고</button>
             <button className="nav-item" onClick={() => setModal('request')}><MessageSquare size={16} />요청 업무<span className="nav-count">3</span></button>
           </div>
@@ -220,13 +221,15 @@ function App() {
       </aside>
 
       <main className="main-area">
-        <header className="topbar"><div className="breadcrumbs"><span>프로젝트</span><ChevronRight size={14} /><strong>{project.name}</strong></div><div className="top-actions"><button className="icon-button" aria-label="도움말"><CircleHelp size={17} /></button><button className="icon-button" aria-label="알림"><Bell size={17} /></button><div className="mini-avatar">김</div></div></header>
-        <section className="project-header"><div className="project-heading-main"><div className={`large-project-marker ${project.color}`}><FolderKanban size={20} /></div><div><div className="title-row"><h1>{project.name}</h1><button className="icon-button small" aria-label="프로젝트 메뉴"><MoreHorizontal size={17} /></button></div><div className="project-subtitle"><span>{project.customer}</span><span className="separator">·</span><span>담당 {project.owner}</span><span className="separator">·</span><span><CalendarDays size={13} /> 납기 {project.due}</span></div></div></div><div className="header-actions"><button className="button secondary" onClick={() => flash('프로젝트 링크를 복사했습니다.')}><Paperclip size={15} />공유</button><button className="button primary" onClick={() => { setDraftFile(null); setModal('order'); }}><Plus size={15} />발주 등록</button></div></section>
-        <nav className="project-tabs">{tabs.map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => { setTab(item); setSelectedTask(null); setSelectedOrder(null); }}>{item}{item === '발주 · 입고' && <span className="tab-count">{orders.length}</span>}</button>)}</nav>
+        <header className="topbar"><div className="breadcrumbs"><span>프로젝트</span><ChevronRight size={14} /><strong>{tab === '전체 현황' ? '전체 현황' : project.name}</strong></div><div className="top-actions"><button className="icon-button" aria-label="도움말"><CircleHelp size={17} /></button><button className="icon-button" aria-label="알림"><Bell size={17} /></button><div className="mini-avatar">김</div></div></header>
+        <section className={`project-header ${tab === '전체 현황' ? 'overview-hidden' : ''}`}><div className="project-heading-main"><div className={`large-project-marker ${project.color}`}><FolderKanban size={20} /></div><div><div className="title-row"><h1>{project.name}</h1><button className="icon-button small" aria-label="프로젝트 메뉴"><MoreHorizontal size={17} /></button></div><div className="project-subtitle"><span>{project.customer}</span><span className="separator">·</span><span>담당 {project.owner}</span><span className="separator">·</span><span><CalendarDays size={13} /> 납기 {project.due}</span></div></div></div><div className="header-actions"><button className="button secondary" onClick={() => flash('프로젝트 링크를 복사했습니다.')}><Paperclip size={15} />공유</button><button className="button primary" onClick={() => { setDraftFile(null); setModal('order'); }}><Plus size={15} />발주 등록</button></div></section>
+        <nav className={`project-tabs ${tab === '전체 현황' ? 'overview-hidden' : ''}`}>{tabs.map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => { setTab(item); setSelectedTask(null); setSelectedOrder(null); }}>{item}{item === '발주 · 입고' && <span className="tab-count">{orders.length}</span>}</button>)}</nav>
         <section className="page-content">
+          {tab === '전체 현황' && <OverviewView projects={projects} tasksByProject={tasksByProject} onOpenProject={selectProject} onAddProject={() => setModal('project')} />}
           {tab === '업무' && <>
+            <div className="task-view-switch"><div className="segmented-control"><button className={taskView === '목록' ? 'selected' : ''} onClick={() => setTaskView('목록')}>목록</button><button className={taskView === '보드' ? 'selected' : ''} onClick={() => setTaskView('보드')}>보드</button></div><span>업무를 캘린더와 상태별 카드로 확인합니다.</span></div>
             <div className="toolbar"><div className="toolbar-left"><div className="view-select"><ListFilter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="업무 필터"><option>전체 업무</option><option>미완료</option><option>추원훈</option><option>설계팀</option><option>조립팀</option></select><ChevronDown size={13} /></div><button className="toolbar-button" onClick={() => setFilter('미완료')}>필터</button><button className="toolbar-button" onClick={() => flash('업무는 제작 단계별로 묶여 있습니다.')}>그룹화 <ChevronDown size={13} /></button></div><div className="toolbar-right"><div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="업무 검색" aria-label="업무 검색" /></div><button className="toolbar-button" onClick={() => setModal('task')}><Plus size={15} />업무 추가</button><button className="icon-button bordered" aria-label="더 보기"><MoreHorizontal size={17} /></button></div></div>
-            <TaskGroups tasks={filteredTasks} selectedTask={selectedTask} onSelect={setSelectedTask} />
+            {taskView === '목록' ? <TaskGroups tasks={filteredTasks} selectedTask={selectedTask} onSelect={setSelectedTask} /> : <TaskBoard tasks={filteredTasks} selectedTask={selectedTask} onSelect={setSelectedTask} />}
             {selectedTask && openTask && <TaskDrawer task={openTask} orders={orders} onClose={() => setSelectedTask(null)} onOpenOrder={(id) => { setSelectedOrder(id); setTab('발주 · 입고'); }} onReceive={requestReceipt} onOrder={() => { setDraftFile(null); setModal('order'); }} />}
           </>}
           {tab === '간트차트' && <GanttView tasks={filteredTasks} query={query} setQuery={setQuery} onTaskClick={setSelectedTask} />}
@@ -242,6 +245,87 @@ function App() {
       {toast && <div className="toast" role="status"><Check size={16} />{toast}</div>}
     </div>
   );
+}
+
+const overviewStageDefs = [
+  { label: '설계 · 도면', select: (task) => task.group === '설계' },
+  { label: '발주 · 입고', select: (task) => task.group === '발주 · 입고' },
+  { label: '조립', select: (task) => task.title.includes('조립') },
+  { label: '시운전 · 납품', select: (task) => /시운전|납품/.test(task.title) },
+];
+
+function taskProgress(task) {
+  if (task.status === '완료') return 100;
+  if (task.status === '부분 입고' || task.status === '진행 중') return 50;
+  return 0;
+}
+
+function getProjectOverview(project, tasks) {
+  const progress = tasks.length ? Math.round(tasks.reduce((sum, task) => sum + taskProgress(task), 0) / tasks.length) : 0;
+  const today = new Date().toISOString().slice(0, 10);
+  const isLate = tasks.some((task) => task.status !== '완료' && task.due && task.due < today);
+  const status = tasks.length === 0 ? '대기' : isLate ? '지연' : progress === 100 ? '완료' : '진행 중';
+  const allDates = tasks.flatMap((task) => [task.start, task.due]).filter(Boolean).sort();
+  const stages = overviewStageDefs.map((stage) => {
+    const stageTasks = tasks.filter(stage.select);
+    const stageProgress = stageTasks.length ? Math.round(stageTasks.reduce((sum, task) => sum + taskProgress(task), 0) / stageTasks.length) : 0;
+    let stageStatus = '미등록';
+    if (stageTasks.length) {
+      if (stageTasks.every((task) => task.status === '완료')) stageStatus = '완료';
+      else if (stageTasks.some((task) => task.status !== '완료' && task.due && task.due < today)) stageStatus = '지연';
+      else if (stageTasks.some((task) => task.status === '부분 입고')) stageStatus = '부분 입고';
+      else if (stageTasks.some((task) => task.status === '진행 중')) stageStatus = '진행 중';
+      else stageStatus = '대기';
+    }
+    return { ...stage, tasks: stageTasks, progress: stageProgress, status: stageStatus };
+  });
+  return { ...project, tasks, progress, status, start: allDates[0] ?? '', stages };
+}
+
+function OverviewView({ projects, tasksByProject, onOpenProject, onAddProject }) {
+  const [statusFilter, setStatusFilter] = useState('전체');
+  const [query, setQuery] = useState('');
+  const rows = projects.map((project) => getProjectOverview(project, tasksByProject[project.id] ?? []));
+  const visible = rows.filter((row) => row.name.toLowerCase().includes(query.toLowerCase()) || row.customer.toLowerCase().includes(query.toLowerCase()))
+    .filter((row) => statusFilter === '전체' || row.status === statusFilter);
+  const counts = {
+    전체: rows.length,
+    진행: rows.filter((row) => row.status === '진행 중').length,
+    지연: rows.filter((row) => row.status === '지연').length,
+    완료: rows.filter((row) => row.status === '완료').length,
+  };
+  return <div className="overview-page">
+    <div className="overview-heading"><div><span className="eyebrow">WORKSPACE / PROJECTS</span><h1>전체 현황</h1><p>여러 설비 프로젝트의 일정과 진행 단계를 한 화면에서 확인합니다.</p></div><button className="button primary" onClick={onAddProject}><Plus size={15} />프로젝트 추가</button></div>
+    <div className="overview-toolbar"><div className="overview-filters">{[['전체', counts.전체], ['진행 중', counts.진행], ['지연', counts.지연], ['완료', counts.완료]].map(([label, count]) => <button key={label} className={statusFilter === label ? 'active' : ''} onClick={() => setStatusFilter(label)}>{label}<span>{count}</span></button>)}</div><div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="프로젝트 검색" aria-label="프로젝트 검색" /></div></div>
+    <div className="overview-list">{visible.map((row) => <article className="overview-row" key={row.id}>
+      <div className="overview-project-meta"><div className="overview-project-title"><span className={`large-project-marker ${row.color}`}><FolderKanban size={18} /></span><div><button onClick={() => onOpenProject(row.id)}>{row.name}</button><small>{row.customer}</small></div></div><Status>{row.status}</Status><div className="overview-project-facts"><div><span>담당</span><strong>{row.owner || '미정'}</strong></div><div><span>일정</span><strong>{row.start ? fmtShort(row.start) : '시작 미정'} <i>→</i> {row.due ? fmtShort(row.due) : '종료 미정'}</strong></div></div><div className="overview-progress-label"><span>전체 진행</span><strong>{row.progress}%</strong></div><div className="overview-progress"><i style={{ width: `${row.progress}%` }} /></div><button className="overview-open-link" onClick={() => onOpenProject(row.id)}>프로젝트 열기 <ChevronRight size={14} /></button></div>
+      <div className="overview-stage-area"><div className="overview-stage-caption"><span>진행 단계</span><span>{row.stages.filter((stage) => stage.status === '완료').length} / {row.stages.length} 완료</span></div><div className="overview-stage-scroll"><div className="overview-stage-track">{row.stages.map((stage, index) => <div className="overview-stage-unit" key={stage.label}><section className={`overview-stage-card ${stage.status === '완료' ? 'stage-done' : stage.status === '진행 중' || stage.status === '부분 입고' ? 'stage-active' : ''}`}><div className="overview-stage-card-head"><strong>{stage.label}</strong><Status>{stage.status}</Status></div><div className="overview-stage-task-list">{stage.tasks.length ? stage.tasks.slice(0, 2).map((task) => <div className="overview-stage-task" key={task.id}><span>{task.title}</span><small>{task.owner}</small></div>) : <div className="overview-stage-empty">업무 미등록</div>}{stage.tasks.length > 2 && <small className="overview-more-tasks">+{stage.tasks.length - 2}개 업무</small>}</div><div className="overview-stage-dates">{stage.tasks.length ? `${fmtShort(stage.tasks[0].start)} — ${fmtShort(stage.tasks[stage.tasks.length - 1].due)}` : '일정 미정'}</div><div className="overview-stage-progress"><i style={{ width: `${stage.progress}%` }} /></div><div className="overview-stage-percent">{stage.progress}%</div></section>{index < row.stages.length - 1 && <span className="overview-stage-arrow"><ChevronRight size={17} /></span>}</div>)}</div></div></div>
+    </article>)}{visible.length === 0 && <div className="overview-empty">검색 조건에 맞는 프로젝트가 없습니다.</div>}</div>
+  </div>;
+}
+
+function TaskBoard({ tasks, selectedTask, onSelect }) {
+  const weekDays = useMemo(() => {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + index);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      return { key, day: date.toLocaleDateString('ko-KR', { weekday: 'short' }), date: date.getDate(), today: key === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}` };
+    });
+  }, []);
+  const columns = [
+    { title: '시작 전', statuses: ['대기'], color: 'neutral' },
+    { title: '진행 중', statuses: ['진행 중'], color: 'purple' },
+    { title: '발주 · 입고', statuses: ['발주 대기', '부분 입고', '입고 대기'], color: 'amber' },
+    { title: '완료', statuses: ['완료'], color: 'green' },
+  ];
+  return <div className="task-board-view"><section className="board-calendar-panel"><div className="board-panel-heading"><div><h2>업무 캘린더</h2><p>이번 주 마감 예정 업무</p></div><span>{weekDays[0].date}일 — {weekDays[6].date}일</span></div><div className="board-calendar-grid">{weekDays.map((day) => <div className={`board-calendar-day ${day.today ? 'today' : ''}`} key={day.key}><div className="board-calendar-day-label"><span>{day.day}</span><strong>{day.date}</strong></div><div className="board-calendar-events">{tasks.filter((task) => task.due === day.key).map((task) => <button key={task.id} onClick={() => onSelect(task.id)}>{task.title}</button>)}</div></div>)}</div></section><div className="board-panel-heading board-columns-heading"><div><h2>프로젝트 업무</h2><p>상태별로 모아 보고 업무 카드를 선택해 상세를 엽니다.</p></div><span>{tasks.length}개 업무</span></div><div className="kanban-board">{columns.map((column) => {
+    const cards = tasks.filter((task) => column.statuses.includes(task.status));
+    return <section className="kanban-column" key={column.title}><div className="kanban-column-head"><span className={`kanban-dot ${column.color}`} /><h3>{column.title}</h3><span className="kanban-count">{cards.length}</span><MoreHorizontal size={16} /></div><div className="kanban-cards">{cards.map((task) => <button key={task.id} className={`kanban-card ${selectedTask === task.id ? 'selected' : ''}`} onClick={() => onSelect(selectedTask === task.id ? null : task.id)}><div className="kanban-card-kicker"><span>{task.group}</span>{task.order && <small>{task.order}</small>}</div><strong>{task.title}</strong><div className="kanban-card-progress"><i style={{ width: `${taskProgress(task)}%` }} /></div><div className="kanban-card-footer"><span><CalendarDays size={13} />{fmtShort(task.due)}</span><span className="kanban-assignee"><i>{task.owner?.[0] ?? '미'}</i>{task.owner}</span></div></button>)}{cards.length === 0 && <div className="kanban-empty">등록된 업무가 없습니다.</div>}</div></section>;
+  })}</div></div>;
 }
 
 function TaskGroups({ tasks, selectedTask, onSelect }) {
