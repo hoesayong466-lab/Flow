@@ -242,7 +242,7 @@ function ModelViewport({ item }) {
     loader.load(item.asset, (loaded) => {
       if (!active) { disposeObject(loaded); return; }
       model = loaded;
-      model.rotation.x = -Math.PI / 2;
+      // SOLIDWORKS exports these 3MFs with Y already pointing up.
       scene.add(model);
       model.updateMatrixWorld(true);
       const bounds = new THREE.Box3().setFromObject(model);
@@ -255,7 +255,7 @@ function ModelViewport({ item }) {
       ground.position.y = -size.y * 0.51;
       camera.near = Math.max(maxDimension / 10000, 0.001);
       camera.far = Math.max(maxDimension * 100, 1000);
-      camera.position.set(maxDimension * 1.8, maxDimension * 1.3, maxDimension * 1.8);
+      camera.position.set(maxDimension * 1.45, maxDimension * 1.05, maxDimension * 1.45);
       camera.updateProjectionMatrix();
       controls.target.set(0, 0, 0);
       controls.update();
