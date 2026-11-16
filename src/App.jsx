@@ -16,6 +16,7 @@ import {
   Inbox,
   LayoutGrid,
   ListFilter,
+  Menu,
   MessageSquare,
   MoreHorizontal,
   Paperclip,
@@ -93,6 +94,7 @@ function App() {
   const [toast, setToast] = useState('');
   const [draftFile, setDraftFile] = useState(null);
   const [receiveTarget, setReceiveTarget] = useState(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const project = projects.find((item) => item.id === projectId) ?? projects[0];
   const tasks = tasksByProject[projectId] ?? [];
   const orders = ordersByProject[projectId] ?? [];
@@ -119,6 +121,7 @@ function App() {
     setSelectedTask(null);
     setSelectedOrder(null);
     setQuery('');
+    setMobileNavOpen(false);
   };
 
   const addTask = (event) => {
@@ -214,15 +217,15 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="workspace"><div className="workspace-icon"><FolderKanban size={18} /></div><div><strong>설비 진행 관리</strong><small>프로젝트 워크스페이스</small></div><ChevronDown size={15} className="workspace-chevron" /></div>
-        <div className="side-scroll">
+      <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
+        <div className="workspace"><div className="workspace-icon"><FolderKanban size={18} /></div><div><strong>설비 진행 관리</strong><small>프로젝트 워크스페이스</small></div><ChevronDown size={15} className="workspace-chevron" /><button className="mobile-nav-toggle" aria-label={mobileNavOpen ? '메뉴 닫기' : '메뉴 열기'} aria-expanded={mobileNavOpen} aria-controls="mobile-workspace-navigation" onClick={() => setMobileNavOpen((open) => !open)}>{mobileNavOpen ? <X size={20} /> : <Menu size={20} />}</button></div>
+        <div className="side-scroll" id="mobile-workspace-navigation">
           <div className="side-section"><div className="side-heading">워크스페이스</div>
-            <button className={`nav-item ${tab === '전체 현황' ? 'nav-selected' : ''}`} onClick={() => setTab('전체 현황')}><LayoutGrid size={16} />전체 현황</button>
-            <button className="nav-item" onClick={() => { setTab('발주 · 입고'); setSelectedOrder(null); }}><Inbox size={16} />발주 · 입고</button>
-            <button className="nav-item" onClick={() => setModal('request')}><MessageSquare size={16} />요청 업무<span className="nav-count">3</span></button>
+            <button className={`nav-item ${tab === '전체 현황' ? 'nav-selected' : ''}`} onClick={() => { setTab('전체 현황'); setMobileNavOpen(false); }}><LayoutGrid size={16} />전체 현황</button>
+            <button className="nav-item" onClick={() => { setTab('발주 · 입고'); setSelectedOrder(null); setMobileNavOpen(false); }}><Inbox size={16} />발주 · 입고</button>
+            <button className="nav-item" onClick={() => { setModal('request'); setMobileNavOpen(false); }}><MessageSquare size={16} />요청 업무<span className="nav-count">3</span></button>
           </div>
-          <div className="side-section project-list"><div className="side-heading"><span>프로젝트</span><button aria-label="프로젝트 추가" onClick={() => setModal('project')}><Plus size={15} /></button></div>
+          <div className="side-section project-list"><div className="side-heading"><span>프로젝트</span><button aria-label="프로젝트 추가" onClick={() => { setModal('project'); setMobileNavOpen(false); }}><Plus size={15} /></button></div>
             {projects.map((item) => <button key={item.id} className={`project-nav ${projectId === item.id ? 'selected' : ''}`} onClick={() => selectProject(item.id)}><span className={`project-marker ${item.color}`}><Hash size={13} /></span><span className="project-nav-name">{item.name}</span>{item.id === 'luna' && <span className="project-dot" />}</button>)}
           </div>
         </div>
@@ -391,6 +394,17 @@ function ActivityEntry({ icon, title, detail, time }) {
 }
 
 function Modal({ title, onClose, children }) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const handleKey = (event) => { if (event.key === 'Escape') onClose(); };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [onClose]);
+
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header><h2 id="modal-title">{title}</h2><button className="icon-button small" onClick={onClose} aria-label="닫기"><X size={17} /></button></header>{children}</section></div>;
 }
 

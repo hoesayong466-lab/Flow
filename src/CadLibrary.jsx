@@ -213,6 +213,9 @@ function ModelViewport({ item }) {
     controls.dampingFactor = 0.065;
     controls.minDistance = 0.01;
     controls.maxDistance = 100000;
+    let modelFrame = null;
+    let userAdjustedCamera = false;
+    controls.addEventListener('start', () => { userAdjustedCamera = true; });
     scene.add(new THREE.HemisphereLight(0xffffff, 0x77727f, 1.25));
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.45);
     keyLight.position.set(1.8, 2.7, 3.4);
@@ -230,9 +233,17 @@ function ModelViewport({ item }) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
       if (!width || !height) return;
+      const oldFitDistance = modelFrame?.distanceFor(camera.aspect) ?? 0;
+      const offset = camera.position.clone().sub(controls.target);
+      const zoomRatio = oldFitDistance && offset.length() ? offset.length() / oldFitDistance : 1;
+      const viewDirection = offset.length() ? offset.normalize() : modelFrame?.direction;
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
+      if (modelFrame && viewDirection) {
+        camera.position.copy(controls.target).addScaledVector(viewDirection, modelFrame.distanceFor(camera.aspect) * zoomRatio);
+        controls.update();
+      }
     };
     const observer = new ResizeObserver(resize);
     observer.observe(canvas.parentElement);
@@ -255,12 +266,41 @@ function ModelViewport({ item }) {
       ground.position.y = -size.y * 0.51;
       camera.near = Math.max(maxDimension / 10000, 0.001);
       camera.far = Math.max(maxDimension * 100, 1000);
-      camera.position.set(maxDimension * 1.45, maxDimension * 1.05, maxDimension * 1.45);
+      const direction = new THREE.Vector3(1.45, 1.05, 1.45).normalize();
+      modelFrame = {
+        direction,
+        distanceFor: (aspect) => {
+          const framingCamera = new THREE.PerspectiveCamera(camera.fov, Math.max(aspect, 0.01), camera.near, camera.far);
+          framingCamera.position.copy(direction);
+          framingCamera.lookAt(0, 0, 0);
+          framingCamera.updateMatrixWorld(true);
+          const tanHalfVertical = Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5);
+          const tanHalfHorizontal = tanHalfVertical * Math.max(aspect, 0.01);
+          let distance = 0;
+          for (const x of [bounds.min.x - center.x, bounds.max.x - center.x]) {
+            for (const y of [bounds.min.y - center.y, bounds.max.y - center.y]) {
+              for (const z of [bounds.min.z - center.z, bounds.max.z - center.z]) {
+                const point = new THREE.Vector3(x, y, z).applyMatrix4(framingCamera.matrixWorldInverse);
+                const depthFromCenter = point.z + 1;
+                distance = Math.max(distance, depthFromCenter + Math.abs(point.x) / tanHalfHorizontal, depthFromCenter + Math.abs(point.y) / tanHalfVertical);
+              }
+            }
+          }
+          return Math.max(distance, maxDimension * 0.55) * 1.1;
+        },
+      };
       camera.updateProjectionMatrix();
       controls.target.set(0, 0, 0);
+      camera.position.copy(direction).multiplyScalar(modelFrame.distanceFor(camera.aspect));
       controls.update();
       controls.saveState();
-      resetRef.current = () => controls.reset();
+      resetRef.current = () => {
+        userAdjustedCamera = false;
+        controls.target.set(0, 0, 0);
+        camera.position.copy(direction).multiplyScalar(modelFrame.distanceFor(camera.aspect));
+        controls.update();
+        controls.saveState();
+      };
       setState({ loading: false, error: '' });
     }, undefined, (error) => {
       if (active) setState({ loading: false, error: error?.message || '3D 모델을 열지 못했습니다.' });
@@ -278,7 +318,7 @@ function ModelViewport({ item }) {
     };
   }, [item.asset]);
 
-  return <div className="cad-model-viewport"><canvas ref={canvasRef} aria-label={`${item.name} 3D 회전 보기`} /><div className="cad-model-controls"><span><span className="cad-model-grip" />마우스로 회전</span><button onClick={() => resetRef.current()} aria-label="화면 맞춤"><RotateCcw size={15} />화면 맞춤</button></div>{state.loading && <div className="cad-model-overlay"><LoaderCircle size={22} className="cad-spinner" /><span>3D 모델을 불러오는 중입니다.</span></div>}{state.error && <div className="cad-model-overlay model-error"><AlertTriangle size={21} /><span>{state.error}</span><a href={item.asset} download>3MF 파일 다운로드</a></div>}</div>;
+  return <div className="cad-model-viewport"><canvas ref={canvasRef} aria-label={`${item.name} 3D 회전 보기`} /><div className="cad-model-controls"><span><span className="cad-model-grip" /><span className="desktop-model-help">마우스로 회전</span><span className="touch-model-help">한 손가락 회전 · 두 손가락 확대</span></span><button onClick={() => resetRef.current()} aria-label="화면 맞춤"><RotateCcw size={15} />화면 맞춤</button></div>{state.loading && <div className="cad-model-overlay"><LoaderCircle size={22} className="cad-spinner" /><span>3D 모델을 불러오는 중입니다.</span></div>}{state.error && <div className="cad-model-overlay model-error"><AlertTriangle size={21} /><span>{state.error}</span><a href={item.asset} download>3MF 파일 다운로드</a></div>}</div>;
 }
 
 function disposeObject(object) {
